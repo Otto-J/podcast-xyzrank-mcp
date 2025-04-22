@@ -3,7 +3,7 @@
   "module": "dist/index.js",
   "main": "dist/index.js",
   "type": "module",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "bin": {
     "podcast-xyzrank-mcp": "dist/index.js"
   },
@@ -13,8 +13,8 @@
     "README.md"
   ],
   "scripts": {
-    "build": "bun build src/index.ts --outdir=dist --target=node ",
-    "build:source": "bun build src/index.ts --outdir=dist --target=node  --minify --sourcemap"
+    "build": "bun build src/index.ts --outdir=dist --minify --target=node",
+    "build:source": "bun build src/index.ts --outdir=dist --target=node --sourcemap"
   },
   "keywords": [
     "podcast",
@@ -24,7 +24,9 @@
     "bun"
   ],
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "@types/debug": "^4.1.12",
+    "debug": "^4.4.0"
   },
   "peerDependencies": {
     "typescript": "^5.0.0"

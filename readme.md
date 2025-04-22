@@ -7,7 +7,7 @@ podcast-xyzrank-mcp，通过 mcp 获取值得收听和推荐的播客。
 本地测试，这会启动一个本地的 server 验证功能。
 
 ```sh
- npx @modelcontextprotocol/inspector npx @web.worker/podcast-xyzrank-mcp
+npx @modelcontextprotocol/inspector npx @web.worker/podcast-xyzrank-mcp
 ```
 
 cursor 等工具配置对应的 json：
@@ -17,7 +17,7 @@ cursor 等工具配置对应的 json：
   "mcpServers": {
     "xyzRank": {
       "command": "npx",
-      "args": ["-y", "@web.worker/podcast-xyzrank-mcp@"]
+      "args": ["-y", "@web.worker/podcast-xyzrank-mcp"]
     }
   }
 }

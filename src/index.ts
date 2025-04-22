@@ -3,7 +3,9 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import debug from "debug";
 
+const log = debug("mcp:xyzrank");
 // const config = [
 //   {
 //     name: "热门节目",
@@ -51,16 +53,18 @@ function getDatePrefix() {
   const year = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, "0");
   const day = String(now.getDate()).padStart(2, "0");
+  log(`getDatePrefix: ${year}-${month}-${day}`);
   return `${year}-${month}-${day}`;
 }
 
 function extractUrl(content: string, regex: RegExp): string | null {
   const match = content.match(regex);
+  log(`extractUrl: ${regex} => ${match}`);
   return match ? match[0] : null;
 }
 
 async function fetchAndParseHomepage() {
-  // console.log(`请求首页: ${HOMEPAGE_URL}`);
+  log(`请求首页: ${HOMEPAGE_URL}`);
   const homepageResponse = await fetch(HOMEPAGE_URL, {
     headers: commonHeaders,
   });
@@ -75,7 +79,7 @@ async function fetchAndParseHomepage() {
 }
 
 async function fetchIndexJs(indexPath: string) {
-  // console.log(`请求 index.js: ${indexPath}`);
+  log(`请求 index.js: ${indexPath}`);
   const indexJsResponse = await fetch(indexPath, { headers: commonHeaders });
   return await indexJsResponse.text();
 }
@@ -86,13 +90,13 @@ async function fetchAndSaveResource(
   url: string,
   datePrefix: string
 ) {
-  // console.log(`fetchAndSaveResource 请求 ${type}: ${url}`);
+  log(`fetchAndSaveResource 请求 ${type}: ${url}`);
   const response = await fetch(url, { headers: commonHeaders });
   const data: any = await response.json();
 
   let cleanData = [];
   if (type === "fullData" || type === "newPodcasts") {
-    // console.log(type, " data is :", data?.data);
+    log(type, " data is :", data?.data);
     cleanData = (data?.data?.podcasts ?? []).map((item: any) => {
       const {
         rank,
@@ -115,7 +119,7 @@ async function fetchAndSaveResource(
         primaryGenreName,
       };
     });
-    // console.log("cleanData", cleanData);
+    log("cleanData", cleanData);
   } else if (type === "hotPodcasts" || type === "hotNewPodcasts") {
     cleanData = (data?.data?.episodes ?? []).map((item: any) => {
       const { title, podcastID, podcastName, logoURL, link, postTime } = item;
@@ -128,7 +132,7 @@ async function fetchAndSaveResource(
         postTime,
       };
     });
-    // console.log("cleanData", cleanData);
+    log("cleanData", cleanData);
   }
 
   // clearn data 只要前五条
@@ -142,28 +146,12 @@ async function fetchAndSaveResource(
     updatedAt: new Date(),
   };
 
-  // await db.collection("podcast_data").insertOne(doc);
-  // console.log(`已保存 ${type} 数据到数据库`);
   return { data: doc, status: "success" };
 }
 
 async function main() {
   try {
-    // console.log("开始处理...");
-    // const db = cloud.mongo.db;
     const datePrefix = getDatePrefix();
-
-    // 检查是否已存在当天的完整数据
-    // const existingCount = await db.collection("podcast_data").countDocuments({
-    //   date: datePrefix,
-    // });
-
-    // if (existingCount >= 4) {
-    //   console.log(`今天(${datePrefix})的数据已完整存在，跳过下载。`);
-    //   return { message: `今天(${datePrefix})的数据已完整存在` };
-    // }
-
-    // console.log("未发现今天的完整数据，开始获取...");
 
     // 获取资源URL
     const indexPath = await fetchAndParseHomepage();
@@ -188,7 +176,7 @@ async function main() {
       ),
     };
 
-    // console.log("提取到的资源地址:", resourceTypes);
+    log("提取到的资源地址:", resourceTypes);
 
     // 处理每种资源
     let successCount = 0;
@@ -196,7 +184,7 @@ async function main() {
 
     for (const [type, url] of Object.entries(resourceTypes)) {
       if (!url) {
-        // console.log(`未找到 ${type} 的URL`);
+        log(`未找到 ${type} 的URL`);
         continue;
       }
 
@@ -205,7 +193,7 @@ async function main() {
         results.push(result);
         successCount++;
       } catch (error) {
-        // console.error(`获取或保存 ${type} 时出错:`, error);
+        log(`获取或保存 ${type} 时出错:`, error);
         results.push({
           type,
           status: "error",
@@ -214,7 +202,7 @@ async function main() {
       }
     }
 
-    // console.log("数据获取完成!");
+    log("数据获取完成!");
     return {
       success: successCount === Object.keys(resourceTypes).length,
       date: datePrefix,
@@ -250,6 +238,7 @@ const server = new McpServer({
 
 server.tool("getXyzRankData", "获取今天的小宇宙排行榜", {}, async () => {
   const data = await main();
+  log("获取到的数据:", data);
   return {
     content: [
       {
@@ -260,7 +249,5 @@ server.tool("getXyzRankData", "获取今天的小宇宙排行榜", {}, async () 
   };
 });
 
-// Start receiving messages on stdin and sending messages on stdout
 const transport = new StdioServerTransport();
-// console.log("transport", transport);
 await server.connect(transport);
