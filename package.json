@@ -13,6 +13,7 @@
     "README.md"
   ],
   "scripts": {
+    "dev": "DEBUG=* bunx @modelcontextprotocol/inspector bun src/index.ts",
     "build": "bun build src/index.ts --outdir=dist --minify --target=node",
     "build:source": "bun build src/index.ts --outdir=dist --target=node --sourcemap"
   },
@@ -24,6 +25,7 @@
     "bun"
   ],
   "devDependencies": {
+    "@modelcontextprotocol/inspector": "latest",
     "@types/bun": "latest",
     "@types/debug": "^4.1.12",
     "debug": "^4.4.0"
