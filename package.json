@@ -16,6 +16,13 @@
     "build": "bun build src/index.ts --outdir=dist --target=node ",
     "build:source": "bun build src/index.ts --outdir=dist --target=node  --minify --sourcemap"
   },
+  "keywords": [
+    "podcast",
+    "ranking",
+    "mcp",
+    "model-context-protocol",
+    "bun"
+  ],
   "devDependencies": {
     "@types/bun": "latest"
   },
