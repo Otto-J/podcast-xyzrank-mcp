@@ -20,13 +20,13 @@ export const commonHeaders = {
   "Referrer-Policy": "strict-origin-when-cross-origin",
 };
 
-const config = {
-  fullData: "热门节目",
+// const config = {
+//   fullData: "热门节目",
 
-  newPodcasts: "热门播客",
-  hotNewPodcasts: "新锐节目",
-  hotPodcasts: "新锐播客",
-};
+//   newPodcasts: "热门播客",
+//   hotNewPodcasts: "新锐节目",
+//   hotPodcasts: "新锐播客",
+// };
 
 export const HOMEPAGE_URL = "https://xyzrank.com/";
 export const INDEX_PATH_REGEX =
