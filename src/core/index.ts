@@ -1,4 +1,5 @@
 import debug from "debug";
+import cache from "./cache";
 
 const log = debug("mcp:xyzrank");
 
@@ -16,9 +17,11 @@ export const commonHeaders = {
   "sec-fetch-dest": "empty",
   "sec-fetch-mode": "cors",
   "sec-fetch-site": "same-origin",
-  Referer: "https://xyzrank.com/?from=itab",
+  Referer: "https://xyzrank.com/?from=xyzrank-mcp",
   "Referrer-Policy": "strict-origin-when-cross-origin",
 };
+
+const FETCH_TIME_KEY = "fetchTime";
 
 // const config = {
 //   fullData: "热门节目",
@@ -32,8 +35,13 @@ export const HOMEPAGE_URL = "https://xyzrank.com/";
 export const INDEX_PATH_REGEX =
   /<script type="module" crossorigin src="(https:\/\/xyzrank\.justinbot\.com\/assets\/index\.[a-zA-Z0-9]+\.js)"><\/script>/;
 
+const isDateExpired = (lstDate: string): boolean => {
+  const now = getDatePrefix();
+  return now !== lstDate;
+};
+
 // 辅助函数
-export function getDatePrefix() {
+export function getDatePrefix(): `${number}-${string}-${string}` {
   const now = new Date();
   const year = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, "0");
@@ -71,12 +79,19 @@ export async function fetchIndexJs(indexPath: string) {
 
 export async function fetchAndSaveResource(type: string, url: string) {
   log(`fetchAndSaveResource 请求 ${type}: ${url}`);
+
   const response = await fetch(url, { headers: commonHeaders });
   const data: any = await response.json();
 
   let cleanData = [];
   if (type === "fullData" || type === "newPodcasts") {
+    // note: fullData 长度有长达 5k+ 条数据，所以需要缓存
     log(type, " data is :", data?.data);
+
+    // set cache
+    cache.set(type, {
+      data: data?.data?.podcasts ?? [],
+    });
     cleanData = (data?.data?.podcasts ?? [])
       .map((item: any) => {
         const {
@@ -84,7 +99,6 @@ export async function fetchAndSaveResource(type: string, url: string) {
           name,
           primaryGenreName,
           id: xyzRankId,
-          logoURL,
           trackCount,
           lastReleaseDate,
           links,
@@ -93,7 +107,6 @@ export async function fetchAndSaveResource(type: string, url: string) {
           rank,
           name,
           xyzRankId,
-          logoURL,
           trackCount,
           lastReleaseDate,
           links,
@@ -105,21 +118,33 @@ export async function fetchAndSaveResource(type: string, url: string) {
   } else if (type === "hotPodcasts" || type === "hotNewPodcasts") {
     cleanData = (data?.data?.episodes ?? [])
       .map((item: any) => {
-        const { title, podcastID, podcastName, logoURL, link, postTime } = item;
-        return {
+        const {
           title,
-          podcastID,
           podcastName,
-          logoURL,
+          totalEpisodesCount,
+          link,
+          postTime,
+          playCount,
+          subscription,
+          primaryGenreName,
+        } = item;
+        return {
+          totalEpisodesCount,
+          primaryGenreName,
+          title,
+          subscription,
+          podcastName,
+          playCount,
           link,
           postTime,
         };
       })
-      .slice(0, 5);
+      .slice(0, 15);
     log("cleanData", cleanData);
   }
 
   return {
+    status: "success",
     type,
     data: cleanData,
   };
@@ -128,6 +153,13 @@ export async function fetchAndSaveResource(type: string, url: string) {
 export async function main() {
   try {
     const datePrefix = getDatePrefix();
+
+    const cachedData = cache.get("mainResult");
+    const hasCache = cache.get(FETCH_TIME_KEY) as string;
+    if (hasCache && !isDateExpired(hasCache) && cachedData) {
+      log(`使用缓存数据，缓存时间: ${hasCache}`);
+      return cachedData;
+    }
 
     // 获取资源URL
     const indexPath = await fetchAndParseHomepage();
@@ -155,7 +187,6 @@ export async function main() {
     log("提取到的资源地址:", resourceTypes);
 
     // 处理每种资源
-    let successCount = 0;
     const results = [];
 
     for (const [type, url] of Object.entries(resourceTypes)) {
@@ -167,7 +198,6 @@ export async function main() {
       try {
         const result = await fetchAndSaveResource(type, url);
         results.push(result);
-        successCount++;
       } catch (error) {
         log(`获取或保存 ${type} 时出错:`, error);
         results.push({
@@ -179,11 +209,12 @@ export async function main() {
     }
 
     log("数据获取完成!");
-    return {
-      success: successCount === Object.keys(resourceTypes).length,
-      date: datePrefix,
-      results,
-    };
+
+    // 保存结果到缓存
+    cache.set("mainResult", results);
+    cache.set(FETCH_TIME_KEY, datePrefix);
+
+    return results;
   } catch (error) {
     console.error("获取数据时出错:", error);
     return {
