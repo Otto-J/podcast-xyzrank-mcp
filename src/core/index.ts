@@ -21,15 +21,26 @@ export const commonHeaders = {
   "Referrer-Policy": "strict-origin-when-cross-origin",
 };
 
-const FETCH_TIME_KEY = "fetchTime";
+// 缓存 key
+const CACHE_KEY = "mainResult";
 
-// const config = {
-//   fullData: "热门节目",
+const TYPE_NAME = {
+  fullData: "热门节目",
+  newPodcasts: "热门播客",
+  hotNewPodcasts: "新锐节目",
+  hotPodcasts: "新锐播客",
+};
 
-//   newPodcasts: "热门播客",
-//   hotNewPodcasts: "新锐节目",
-//   hotPodcasts: "新锐播客",
-// };
+interface PodcastDataItem {
+  status: boolean;
+  type: string;
+  data: Array<any>;
+}
+
+export interface PodcastData {
+  datePrefix: string;
+  results: Array<PodcastDataItem>;
+}
 
 export const HOMEPAGE_URL = "https://xyzrank.com/";
 export const INDEX_PATH_REGEX =
@@ -77,7 +88,10 @@ export async function fetchIndexJs(indexPath: string) {
   return await indexJsResponse.text();
 }
 
-export async function fetchAndSaveResource(type: string, url: string) {
+export async function fetchAndSaveResource(
+  type: keyof typeof TYPE_NAME,
+  url: string
+): Promise<PodcastDataItem> {
   log(`fetchAndSaveResource 请求 ${type}: ${url}`);
 
   const response = await fetch(url, { headers: commonHeaders });
@@ -88,84 +102,77 @@ export async function fetchAndSaveResource(type: string, url: string) {
     // note: fullData 长度有长达 5k+ 条数据，所以需要缓存
     log(type, " data is :", data?.data);
 
-    // set cache
-    cache.set(type, {
-      data: data?.data?.podcasts ?? [],
+    cleanData = (data?.data?.podcasts ?? []).map((item: any) => {
+      const {
+        rank,
+        name,
+        primaryGenreName,
+        // id: xyzRankId,
+        trackCount,
+        lastReleaseDate,
+        links,
+      } = item;
+      return {
+        rank,
+        name,
+        // xyzRankId,
+        trackCount,
+        lastReleaseDate,
+        links,
+        primaryGenreName,
+      };
     });
-    cleanData = (data?.data?.podcasts ?? [])
-      .map((item: any) => {
-        const {
-          rank,
-          name,
-          primaryGenreName,
-          id: xyzRankId,
-          trackCount,
-          lastReleaseDate,
-          links,
-        } = item;
-        return {
-          rank,
-          name,
-          xyzRankId,
-          trackCount,
-          lastReleaseDate,
-          links,
-          primaryGenreName,
-        };
-      })
-      .slice(0, 5);
-    log("cleanData", cleanData);
+    log("cleanData", cleanData.length);
   } else if (type === "hotPodcasts" || type === "hotNewPodcasts") {
-    cleanData = (data?.data?.episodes ?? [])
-      .map((item: any) => {
-        const {
-          title,
-          podcastName,
-          totalEpisodesCount,
-          link,
-          postTime,
-          playCount,
-          subscription,
-          primaryGenreName,
-        } = item;
-        return {
-          totalEpisodesCount,
-          primaryGenreName,
-          title,
-          subscription,
-          podcastName,
-          playCount,
-          link,
-          postTime,
-        };
-      })
-      .slice(0, 15);
-    log("cleanData", cleanData);
+    cleanData = (data?.data?.episodes ?? []).map((item: any) => {
+      const {
+        title,
+        podcastName,
+        totalEpisodesCount,
+        link,
+        postTime,
+        playCount,
+        subscription,
+        primaryGenreName,
+      } = item;
+      return {
+        totalEpisodesCount,
+        primaryGenreName,
+        title,
+        subscription,
+        podcastName,
+        playCount,
+        link,
+        postTime,
+      };
+    });
+    log("cleanData", cleanData.length);
   }
 
   return {
-    status: "success",
-    type,
+    status: true,
+    type: TYPE_NAME[type],
     data: cleanData,
   };
 }
 
-export async function main() {
+// 确保播客数据存在，根据日期信息判断是否读取 cache
+export async function ensurePodcastData(): Promise<PodcastData> {
   try {
     const datePrefix = getDatePrefix();
 
-    const cachedData = cache.get("mainResult");
-    const hasCache = cache.get(FETCH_TIME_KEY) as string;
-    if (hasCache && !isDateExpired(hasCache) && cachedData) {
-      log(`使用缓存数据，缓存时间: ${hasCache}`);
-      return cachedData;
+    const hasCache = cache.get<PodcastData>(CACHE_KEY);
+    if (hasCache && !isDateExpired(hasCache.datePrefix) && hasCache.results) {
+      log(`使用缓存数据，缓存时间: ${hasCache.datePrefix}`);
+      return hasCache;
     }
+    log("没有缓存数据，开始获取数据");
 
     // 获取资源URL
     const indexPath = await fetchAndParseHomepage();
     const indexJsContent = await fetchIndexJs(indexPath);
 
-    const resourceTypes = {
+    const resourceTypes: Record<keyof typeof TYPE_NAME, string | null> = {
       fullData: extractUrl(
         indexJsContent,
         /https:\/\/xyzrank\.com\/assets\/full\.[a-zA-Z0-9]+\.json/
@@ -187,7 +194,7 @@ export async function main() {
     log("提取到的资源地址:", resourceTypes);
 
     // 处理每种资源
-    const results = [];
+    const results: PodcastDataItem[] = [];
 
     for (const [type, url] of Object.entries(resourceTypes)) {
       if (!url) {
@@ -196,14 +203,17 @@ export async function main() {
       }
 
       try {
-        const result = await fetchAndSaveResource(type, url);
+        const result = await fetchAndSaveResource(
+          type as keyof typeof TYPE_NAME,
+          url
+        );
         results.push(result);
       } catch (error) {
         log(`获取或保存 ${type} 时出错:`, error);
         results.push({
-          type,
-          status: "error",
-          error: (error as Error).message,
+          type: type as PodcastDataItem["type"],
+          status: false,
+          data: [],
         });
       }
     }
@@ -211,15 +221,15 @@ export async function main() {
     log("数据获取完成!");
 
     // 保存结果到缓存
-    cache.set("mainResult", results);
-    cache.set(FETCH_TIME_KEY, datePrefix);
+    const data: PodcastData = { datePrefix, results };
+    cache.set(CACHE_KEY, data);
 
-    return results;
+    return data;
   } catch (error) {
     console.error("获取数据时出错:", error);
     return {
-      success: false,
-      error: (error as Error).message,
+      datePrefix: getDatePrefix(),
+      results: [],
     };
   }
 }

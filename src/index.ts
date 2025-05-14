@@ -5,7 +5,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import debug from "debug";
 import { parseRssAndSave } from "./core/parserRss";
 import { z } from "zod";
-import { main } from "./core/index.js";
+import { ensurePodcastData } from "./core/index.js";
 
 const log = debug("mcp:xyzrank");
 
@@ -13,8 +13,9 @@ const log = debug("mcp:xyzrank");
 const server = new McpServer(
   {
     name: "PodcastHelper",
-    description: "收听播客小助手",
-    version: "1.0.0",
+    description:
+      "播客收听小助手，可以获得小宇宙音频播客节目、热门播客、Web Worker 播客推荐，得到不同分类的播客节目推荐",
+    version: "1.0.1",
   },
   {
     capabilities: {
@@ -26,16 +27,23 @@ const server = new McpServer(
 // 定义获取小宇宙排行榜工具
 server.tool(
   "getXyzRankData",
-  "获取并推荐今天的小宇宙播客排行榜",
+  "获取并推荐今天的小宇宙播客排行，得到热门播客、热门单集、新锐播客、新锐单集推荐信息",
   {},
   async () => {
-    const data = await main();
-    log("获取到的数据:", data);
+    const data = await ensurePodcastData();
+    log("获取到的数据:", data.results.length);
+    // 默认情况下,各项数据都返回五条
+    const result = data.results.map((item) => {
+      return {
+        type: item.type,
+        data: item.data.slice(0, 5),
+      };
+    });
     return {
       content: [
         {
           type: "text",
-          text: JSON.stringify(data, null, 2),
+          text: JSON.stringify(result),
         },
       ],
     };
