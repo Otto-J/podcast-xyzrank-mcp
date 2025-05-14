@@ -24,7 +24,7 @@ export const commonHeaders = {
 // 缓存 key
 const CACHE_KEY = "mainResult";
 
-const TYPE_NAME = {
+export const TYPE_NAME = {
   fullData: "热门节目",
   newPodcasts: "热门播客",
   hotNewPodcasts: "新锐节目",
@@ -63,7 +63,7 @@ export function getDatePrefix(): `${number}-${string}-${string}` {
 
 export function extractUrl(content: string, regex: RegExp): string | null {
   const match = content.match(regex);
-  log(`extractUrl: ${regex} => ${match}`);
+  log(`extractUrl: ${match}`);
   return match ? match[0] : null;
 }
 
@@ -100,8 +100,6 @@ export async function fetchAndSaveResource(
   let cleanData = [];
   if (type === "fullData" || type === "newPodcasts") {
     // note: fullData 长度有长达 5k+ 条数据，所以需要缓存
-    log(type, " data is :", data?.data);
-
     cleanData = (data?.data?.podcasts ?? []).map((item: any) => {
       const {
         rank,

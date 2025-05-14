@@ -5,7 +5,8 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import debug from "debug";
 import { parseRssAndSave } from "./core/parserRss";
 import { z } from "zod";
-import { ensurePodcastData } from "./core/index.js";
+import { ensurePodcastData, TYPE_NAME } from "./core/index.js";
+import Fuse from "fuse.js";
 
 const log = debug("mcp:xyzrank");
 
@@ -47,6 +48,71 @@ server.tool(
         },
       ],
     };
+  }
+);
+// 定义 tool，通过播客名字查询 rss 地址
+server.tool(
+  "getRssByPodcastName",
+  "通过播客名字查询 rss 地址",
+  {
+    podcastName: z.string().describe("播客名字").trim(),
+  },
+  async (data) => {
+    const res = await ensurePodcastData();
+    const fullData = res.results.find(
+      (item) => item.type === TYPE_NAME.fullData
+    );
+    const podcastNameList = fullData?.data.map((item) => item.name);
+
+    const fuse = new Fuse(podcastNameList?.map((title) => ({ title })) ?? [], {
+      includeScore: true,
+      // 匹配阈值，值越低匹配越精确
+      threshold: 0.15,
+      // 搜索时忽略位置
+      ignoreLocation: true,
+      // 搜索键
+      keys: ["title"],
+    });
+    const result = fuse.search(data.podcastName, {
+      limit: 10,
+    });
+    const podcastName: string[] = result.map((item) => item.item.title);
+    // todo 这里改成循环
+    const podcastInfo = podcastName.map((name) => {
+      const podcast = fullData?.data.find((item) => item.name === name);
+      const linkss = podcast?.links ?? [];
+      const rss = linkss.find((item: any) => item.name === "rss")?.url;
+      return {
+        name,
+        rss: rss || "未公开RSS地址",
+      };
+    });
+
+    if (podcastInfo.length === 0) {
+      return {
+        content: [{ type: "text", text: "没有找到对应的播客节目" }],
+      };
+    } else if (podcastInfo.length === 1) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `匹配到《${podcastInfo[0].name}》播客节目，对应的 rss 地址是：${podcastInfo[0].rss}`,
+          },
+        ],
+      };
+    } else {
+      return {
+        content: [
+          {
+            type: "text",
+            text: podcastInfo
+              .map((i) => `匹配到《${i.name}》，RSS 地址： "${i.rss}" ;`)
+              .join("\n"),
+          },
+        ],
+      };
+    }
   }
 );
 server.tool(
