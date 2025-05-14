@@ -27,7 +27,7 @@ const server = new McpServer(
 
 // 定义获取小宇宙排行榜工具
 server.tool(
-  "getXyzRankData",
+  "getXyzRankPodcastData",
   "获取并推荐今天的小宇宙播客排行，得到热门播客、热门单集、新锐播客、新锐单集推荐信息",
   {},
   async () => {
@@ -40,6 +40,7 @@ server.tool(
         data: item.data.slice(0, 5),
       };
     });
+    (result as any).keyMap = data.keyMap;
     return {
       content: [
         {
@@ -52,10 +53,10 @@ server.tool(
 );
 // 定义 tool，通过播客名字查询 rss 地址
 server.tool(
-  "getRssByPodcastName",
+  "getRSSByPodcastName",
   "通过播客名字查询 rss 地址",
   {
-    podcastName: z.string().describe("播客名字").trim(),
+    podcastName: z.string().describe("播客名字，允许空格模糊搜索"),
   },
   async (data) => {
     const res = await ensurePodcastData();
@@ -64,58 +65,63 @@ server.tool(
     );
     const podcastNameList = fullData?.data.map((item) => item.name);
 
+    // 将输入字符串按空格和逗号分割成数组
+    const searchTerms = data.podcastName
+      .split(/[\s,]+/)
+      .filter((term) => term.length > 0);
+
     const fuse = new Fuse(podcastNameList?.map((title) => ({ title })) ?? [], {
       includeScore: true,
       // 匹配阈值，值越低匹配越精确
-      threshold: 0.15,
+      threshold: 0.2,
       // 搜索时忽略位置
       ignoreLocation: true,
       // 搜索键
       keys: ["title"],
     });
-    const result = fuse.search(data.podcastName, {
-      limit: 10,
+
+    // 使用 $and 操作符构建搜索表达式
+    const searchExpression = {
+      $and: searchTerms.map((term) => ({
+        title: term,
+      })),
+    };
+
+    const results = fuse.search(searchExpression, {
+      limit: 20,
     });
-    const podcastName: string[] = result.map((item) => item.item.title);
-    // todo 这里改成循环
+
+    // 这里按照订阅数量进行排序
+    const podcastName: string[] = results.map((item) => item.item.title);
     const podcastInfo = podcastName.map((name) => {
       const podcast = fullData?.data.find((item) => item.name === name);
-      const linkss = podcast?.links ?? [];
-      const rss = linkss.find((item: any) => item.name === "rss")?.url;
+      const links = podcast?.links ?? [];
+      let rss = links.find((item: any) => item.name === "rss")?.url;
       // 如果没有主动公开，拼我的 rss 地址吧
       if (!rss) {
-        let xyzRankId = linkss.find((item: any) => item.name === "xyz")?.url;
-        if (!xyzRankId) {
+        let xyzRankUrl = links.find((item: any) => item.name === "xyz")?.url;
+        if (!xyzRankUrl) {
           return {
+            rank: podcast!.rank,
             name,
             rss: "",
           };
         }
-        xyzRankId = xyzRankId.split("podcast/").pop();
-        const OTTO_RSSHUB_URL = `https://rsshub.ijust.cc/xiaoyuzhou/podcast/${xyzRankId}`;
-        return {
-          name,
-          rss: OTTO_RSSHUB_URL,
-        };
+        const xyzRankId = xyzRankUrl.split("podcast/").pop();
+        rss = `https://rsshub.ijust.cc/xiaoyuzhou/podcast/${xyzRankId}`;
       }
       return {
+        rank: podcast!.rank,
         name,
         rss,
       };
     });
+    // 这里按照 rank 排序
+    podcastInfo.sort((a, b) => a.rank - b.rank);
 
     if (podcastInfo.length === 0) {
       return {
         content: [{ type: "text", text: "没有找到对应的播客节目" }],
-      };
-    } else if (podcastInfo.length === 1) {
-      return {
-        content: [
-          {
-            type: "text",
-            text: `匹配到《${podcastInfo[0].name}》播客节目，对应的 rss 地址是：${podcastInfo[0].rss}`,
-          },
-        ],
       };
     } else {
       return {
@@ -123,7 +129,7 @@ server.tool(
           {
             type: "text",
             text: podcastInfo
-              .map((i) => `匹配到《${i.name}》，RSS 地址： "${i.rss}" ;`)
+              .map((i) => `《${i.name}》排名${i.rank} RSS:"${i.rss}"`)
               .join("\n"),
           },
         ],
@@ -132,7 +138,7 @@ server.tool(
   }
 );
 server.tool(
-  "getRSSPodcast",
+  "parseRSSInfo",
   "通过 RSS 解析播客节目",
   {
     RSS: z.string().describe("RSS 源，以 http 网址开头"),
@@ -151,20 +157,33 @@ server.tool(
         ],
       };
     }
+    const xyzData = await ensurePodcastData();
+
     const result = res.result;
-    result!.items = result!.items.slice(0, 10);
+    const podcastName = res.result?.basicInfo.title;
+    const fullData = xyzData.results.find(
+      (item) => item.type === TYPE_NAME.fullData
+    );
+    const info = fullData?.data.find((item) => item.name === podcastName);
+
+    info.links = undefined;
+    (result! as any).xyzInfo = info;
+    // (result! as any).keyMap =;
+
+    // 长度返回最近 15 条
+    result!.items = result!.items.slice(0, 15);
     return {
       content: [
         {
           type: "text",
-          text: JSON.stringify(result, null, 2),
+          text: JSON.stringify(result),
         },
       ],
     };
   }
 );
 server.tool(
-  "getWebWorkerPodcast",
+  "getWebWorkerPodcastInfo",
   "获取前端程序员都爱听的 Web Worker 播客节目",
   {},
   async () => {

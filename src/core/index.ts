@@ -40,6 +40,7 @@ interface PodcastDataItem {
 export interface PodcastData {
   datePrefix: string;
   results: Array<PodcastDataItem>;
+  keyMap: Record<string, string>;
 }
 
 export const HOMEPAGE_URL = "https://xyzrank.com/";
@@ -101,24 +102,9 @@ export async function fetchAndSaveResource(
   if (type === "fullData" || type === "newPodcasts") {
     // note: fullData 长度有长达 5k+ 条数据，所以需要缓存
     cleanData = (data?.data?.podcasts ?? []).map((item: any) => {
-      const {
-        rank,
-        name,
-        primaryGenreName,
-        // id: xyzRankId,
-        trackCount,
-        lastReleaseDate,
-        links,
-      } = item;
-      return {
-        rank,
-        name,
-        // xyzRankId,
-        trackCount,
-        lastReleaseDate,
-        links,
-        primaryGenreName,
-      };
+      delete item.id;
+      delete item.lastReleaseDateDayCount;
+      return item;
     });
     log("cleanData", cleanData.length);
   } else if (type === "hotPodcasts" || type === "hotNewPodcasts") {
@@ -154,6 +140,23 @@ export async function fetchAndSaveResource(
   };
 }
 
+export const keyMap = {
+  playCount: "播放量",
+  commentCount: "评论量",
+  openRate: "打开率",
+  duration: "时长",
+  primaryGenreName: "分类",
+  subscription: "订阅量",
+  totalEpisodesCount: "总集数",
+  postTime: "发布时间",
+  trackCount: "总集数",
+  avgDuration: "平均时长",
+  avgPlayCount: "平均播放量",
+  avgCommentCount: "平均评论量",
+  avgInteractIndicator: "互动指数",
+  avgUpdateFrequency: "更新频率",
+  avgOpenRate: "平均打开率",
+};
 // 确保播客数据存在，根据日期信息判断是否读取 cache
 export async function ensurePodcastData(): Promise<PodcastData> {
   try {
@@ -219,7 +222,11 @@ export async function ensurePodcastData(): Promise<PodcastData> {
     log("数据获取完成!");
 
     // 保存结果到缓存
-    const data: PodcastData = { datePrefix, results };
+    const data: PodcastData = {
+      datePrefix,
+      results,
+      keyMap,
+    };
     cache.set(CACHE_KEY, data);
 
     return data;
@@ -228,6 +235,7 @@ export async function ensurePodcastData(): Promise<PodcastData> {
     return {
       datePrefix: getDatePrefix(),
       results: [],
+      keyMap,
     };
   }
 }
