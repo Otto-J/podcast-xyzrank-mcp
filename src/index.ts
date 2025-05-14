@@ -82,9 +82,25 @@ server.tool(
       const podcast = fullData?.data.find((item) => item.name === name);
       const linkss = podcast?.links ?? [];
       const rss = linkss.find((item: any) => item.name === "rss")?.url;
+      // 如果没有主动公开，拼我的 rss 地址吧
+      if (!rss) {
+        let xyzRankId = linkss.find((item: any) => item.name === "xyz")?.url;
+        if (!xyzRankId) {
+          return {
+            name,
+            rss: "",
+          };
+        }
+        xyzRankId = xyzRankId.split("podcast/").pop();
+        const OTTO_RSSHUB_URL = `https://rsshub.ijust.cc/xiaoyuzhou/podcast/${xyzRankId}`;
+        return {
+          name,
+          rss: OTTO_RSSHUB_URL,
+        };
+      }
       return {
         name,
-        rss: rss || "未公开RSS地址",
+        rss,
       };
     });
 
