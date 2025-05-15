@@ -1,6 +1,8 @@
 # @web.worker/podcast-xyzrank-mcp
 
-podcast-xyzrank-mcp，通过 mcp 获取值得收听和推荐的播客。
+![](./logo.webp)
+
+podcast-xyzrank-mcp 获取值得收听和推荐的播客，查询播客基础、播放数据。
 
 ## 安装
 
@@ -25,7 +27,15 @@ cursor 等工具配置对应的 json：
 
 ## 使用
 
-Q:今天有什么播客推荐？
+podcast-xyzrank-mcp，通过 mcp 获取值得收听和推荐的播客。
+
+Q: 今天有什么播客推荐？
+
+Q: 《Web Worker》 播客最近有什么更新？
+
+Q: 你知道《嘻谈录》播客吗？
+
+Q: https://feed.xyzfm.space/rv449dl9kqka 这个播客有什么值得推荐的节目？
 
 ## 感谢
 
